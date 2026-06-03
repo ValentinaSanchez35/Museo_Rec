@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Broadcaster Console - UC System</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0d1117; color: white;
+            height: 100vh;
+            display: grid;
+            grid-template-columns: 340px 1fr 340px;
+            grid-template-rows: 100vh;
+            gap: 0; overflow: hidden;
+        }
+        .col {
+            background: #161b22; border-right: 1px solid #30363d;
+            display: flex; flex-direction: column;
+            overflow-y: auto; padding: 20px; gap: 16px;
+        }
+        .col:last-child { border-right: none; }
+        .col-title {
+            color: #58a6ff; font-size: 1em; font-weight: 700;
+            padding-bottom: 12px; border-bottom: 1px solid #30363d; flex-shrink: 0;
+        }
+        .btn-primary {
+            background: #238636; color: white; border: none;
+            padding: 11px 16px; border-radius: 6px; cursor: pointer;
+            width: 100%; font-weight: bold; font-size: 0.9em; transition: 0.2s;
+        }
+        .btn-primary:hover:not(:disabled) { background: #2ea043; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-cam {
+            background: #6e40c9; color: white; border: none;
+            padding: 11px 16px; border-radius: 6px; cursor: pointer;
+            width: 100%; font-weight: bold; font-size: 0.9em; transition: 0.2s;
+        }
+        .btn-cam:hover:not(:disabled) { background: #8957e5; }
+        .btn-cam:disabled { opacity: 0.5; cursor: not-allowed; }
+        .status-panel {
+            padding: 12px; background: #0d1117;
+            border-radius: 8px; border-left: 4px solid #58a6ff;
+        }
+        .metric { font-size: 0.78em; color: #8b949e; margin-top: 5px; font-family: monospace; }
+        .video-wrapper {
+            position: relative; background: #000;
+            border-radius: 8px; overflow: hidden;
+            border: 1px solid #30363d; flex-shrink: 0;
+        }
+        .video-wrapper video { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .video-placeholder {
+            position: absolute; inset: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            color: #8b949e; font-size: 0.85em; gap: 8px; background: #000;
+        }
+        .video-placeholder span { font-size: 2.5em; }
+        #camStatus { font-size: 0.78em; color: #8b949e; font-family: monospace; text-align: center; }
+        .live-dot {
+            display: none; align-items: center; gap: 6px;
+            justify-content: center; font-size: 0.82em; font-weight: bold;
+        }
+        .live-dot span {
+            width: 8px; height: 8px; background: #f85149;
+            border-radius: 50%; animation: pulse 1.2s infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .podcast-table { width: 100%; border-collapse: collapse; font-size: 0.82em; }
+        .podcast-table th {
+            color: #8b949e; padding: 7px 8px;
+            border-bottom: 1px solid #30363d; font-weight: 600; text-align: left;
+        }
+        .podcast-table td { padding: 7px 8px; border-bottom: 1px solid #21262d; vertical-align: middle; }
+        .table-row:hover { background: #1c2128; }
+        .btn-small { padding: 3px 8px; font-size: 0.72em; cursor: pointer; border-radius: 4px; border: none; font-weight: bold; }
+        .btn-play { background: #238636; color: white; margin-right: 3px; }
+        .btn-del { background: rgba(248,81,73,0.1); color: #f85149; border: 1px solid rgba(248,81,73,0.2); }
+        .btn-del:hover { background: #da3633; color: white; }
+        .table-scroll { max-height: 160px; overflow-y: auto; border: 1px solid #30363d; border-radius: 6px; background: #0d1117; }
+        .chat-messages {
+            flex: 1; background: #0d1117; border-radius: 8px;
+            padding: 12px; overflow-y: auto; font-size: 0.88em;
+            border: 1px solid #30363d; min-height: 0;
+        }
+        .chat-input-row { display: flex; gap: 6px; flex-shrink: 0; }
+        .chat-input-row input {
+            flex: 1; padding: 9px 12px; background: #0d1117;
+            border: 1px solid #30363d; color: white;
+            border-radius: 6px; font-size: 0.88em;
+        }
+        .chat-input-row input:focus { outline: none; border-color: #58a6ff; }
+        .btn-send {
+            padding: 9px 14px; background: #58a6ff; color: #0d1117;
+            border: none; border-radius: 6px; font-weight: bold;
+            cursor: pointer; font-size: 0.82em; white-space: nowrap;
+        }
+        .btn-send:hover { background: #79c0ff; }
+
+        /* Contador de viewers */
+        .viewer-badge {
+            position: fixed; top: 14px; right: 18px;
+            background: #161b22; border: 1px solid #30363d;
+            border-radius: 20px; padding: 6px 14px;
+            font-size: 0.88em; font-weight: bold;
+            color: #e6edf3; display: flex; align-items: center; gap: 6px;
+            z-index: 100;
+        }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<!-- Contador de viewers -->
+<div class="viewer-badge">
+    👁 <span id="viewerCount">0</span>
+</div>
+
+<!-- COLUMNA 1 — EMISIÓN + PODCASTS -->
+<div class="col">
+    <div class="col-title">📡 Emisión</div>
+
+    <button id="startBtn" class="btn-primary">INICIAR STREAMING</button>
+
+    <div class="status-panel">
+        <div id="statusDisplay" style="font-size:0.88em;">Estado: 🔴 Offline</div>
+        <div id="bitrateDisplay1" class="metric">Packet Loss: 0 pkt</div>
+        <div id="bitrateDisplay2" class="metric">Throughput: 0 kbps</div>
+    </div>
+
+    <div style="border-top:1px solid #30363d; padding-top:14px;">
+        <div class="col-title" style="border:none; padding:0 0 10px;">📁 Podcasts</div>
+        <div class="table-scroll">
+            <table class="podcast-table">
+                <thead>
+                    <tr>
+                        <th>Archivo</th>
+                        <th style="text-align:center; width:100px;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="podcastTableBody"></tbody>
+            </table>
+        </div>
+        <button id="addAudioBtn" class="btn-small"
+                style="margin-top:8px; width:100%; background:#30363d; color:white; padding:7px;">
+            + Cargar Audio
+        </button>
+    </div>
+</div>
+
+<!-- COLUMNA 2 — CÁMARA EN VIVO -->
+<div class="col" style="border-right:1px solid #30363d; background:#0d1117;">
+    <div class="col-title" style="border-color:#30363d;">📹 Cámara en Vivo</div>
+
+    <button id="startCamBtn" class="btn-cam" disabled>📷 ACTIVAR CÁMARA EN VIVO</button>
+
+    <div class="video-wrapper" style="flex:1; min-height:260px;">
+        <div class="video-placeholder" id="camPlaceholder">
+            <span>📷</span>
+            <div>Vista previa de cámara</div>
+            <div style="font-size:0.78em; color:#484f58; margin-top:4px;">Inicia streaming primero</div>
+        </div>
+        <video id="localVideo" autoplay muted playsinline
+               style="display:none; width:100%; height:100%; object-fit:cover;"></video>
+    </div>
+
+    <div id="camStatus" style="font-size:0.8em; color:#8b949e; font-family:monospace; text-align:center;">
+        Sin transmisión de video
+    </div>
+
+    <div class="live-dot" id="liveDot">
+        <span></span> TRANSMITIENDO EN VIVO
+    </div>
+</div>
+
+<!-- COLUMNA 3 — CHAT -->
+<div class="col" style="background:#161b22;">
+    <div class="col-title">💬 Chat Unificado</div>
+
+    <div class="chat-messages" id="chatDisplay">
+        <div id="welcomeMessage" style="color:#484f58; font-style:italic; font-size:0.88em;">
+            Bienvenido al sistema telemático...
+        </div>
+    </div>
+
+    <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Escribe un mensaje...">
+        <button id="sendChatBtn" class="btn-send">ENVIAR</button>
+    </div>
+</div>
+
+<script type="module" src="./main-broadcaster.js"></script>
+
+<script>
+    document.getElementById('localVideo').addEventListener('play', () => {
+        document.getElementById('liveDot').style.display = 'flex';
+    });
+</script>
+
+</body>
+</html>
